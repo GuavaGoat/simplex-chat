@@ -63,6 +63,8 @@ final class WebRTCClient: NSObject, RTCVideoViewDelegate, RTCFrameEncryptorDeleg
     private let audioQueue = DispatchQueue(label: "chat.simplex.app.audio")
     private var sendCallResponse: (WVAPIMessage) async -> Void
     var activeCall: Call?
+    private var reconnectingTask: Task<Void, Never>? = nil
+    private var wasConnected = false
     var notConnectedCall: NotConnectedCall?
     private var localRendererAspectRatio: Binding<CGFloat?>
 
@@ -772,16 +774,29 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
             return
         }
         Task {
+            var state = connectionStateString
+            if wasConnected, newState == .disconnected || newState == .failed {
+                if reconnectingTask != nil { return }
+                reconnectingTask = Task { [weak self] in    
+                    try? await Task.sleep(nanoseconds: 30 * 1000_000000)
+                    guard let self = self, !Task.isCancelled, let call = self.activeCall else { return }
+                    self.reconnectingTask = nil
+                    self.wasConnected = false
+                    self.peerConnection(call.connection, didChange: RTCIceConnectionState.disconnected)
+                }
+                state = "reconnecting"
+            }
             await sendCallResponse(.init(
                 corrId: nil,
                 resp: .connection(state: ConnectionState(
-                    connectionState: connectionStateString,
+                    connectionState: state,
                     iceConnectionState: iceConnectionStateString,
                     iceGatheringState: iceGatheringStateString,
                     signalingState: signalingStateString)
                 ),
                 command: nil)
             )
+            if state == "reconnecting" { return }
 
             switch newState {
             case .checking:
@@ -790,7 +805,14 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
                 }
                 let enableSpeaker: Bool = ChatModel.shared.activeCall?.localMediaSources.hasVideo == true
                 setSpeakerEnabledAndConfigureSession(enableSpeaker)
-            case .connected: sendConnectedEvent(connection)
+            case .connected:
+                reconnectingTask?.cancel()
+                reconnectingTask = nil
+                // the restored call is not reported as connected again, so the client
+                // keeps the original call duration
+                if wasConnected { return }
+                wasConnected = true
+                sendConnectedEvent(connection)
             case .disconnected, .failed: endCall()
             default: ()
             }
