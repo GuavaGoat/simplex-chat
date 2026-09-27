@@ -775,7 +775,8 @@ extension WebRTCClient: RTCPeerConnectionDelegate {
         }
         Task {
             var state = connectionStateString
-            if wasConnected, newState == .disconnected || newState == .failed {
+            if wasConnected, newState == .disconnected || newState == .failed,
+               (ChatModel.shared.activeCall?.contact.activeConn?.peerChatVRange.maxVersion ?? 0) >= CALL_RECONNECT_VERSION {
                 if reconnectingTask != nil { return }
                 reconnectingTask = Task { [weak self] in    
                     try? await Task.sleep(nanoseconds: 30 * 1000_000000)
