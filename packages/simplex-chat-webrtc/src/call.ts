@@ -110,6 +110,7 @@ interface WCStartCall extends IWCallCommand {
   aesKey?: string
   iceServers?: RTCIceServer[]
   relay?: boolean
+  reconnect?: boolean
 }
 
 interface WCEndCall extends IWCallCommand {
@@ -124,6 +125,7 @@ interface WCAcceptOffer extends IWCallCommand {
   aesKey?: string
   iceServers?: RTCIceServer[]
   relay?: boolean
+  reconnect?: boolean
 }
 
 interface WCallOffer extends IWCallResponse {
@@ -425,7 +427,7 @@ const processCommand = (function () {
     })
   }
 
-  async function initializeCall(config: CallConfig, mediaType: CallMediaType, aesKey?: string): Promise<Call> {
+  async function initializeCall(config: CallConfig, mediaType: CallMediaType, aesKey?: string, reconnect = false): Promise<Call> {
     let pc: RTCPeerConnection
     try {
       pc = new RTCPeerConnection(config.peerConnectionConfig)
@@ -514,7 +516,7 @@ const processCommand = (function () {
           : pc.iceConnectionState == "completed"
           ? "connected"
           : "connecting") /* webView 69-70 doesn't have connectionState yet */
-      if (wasConnected) {
+      if (reconnect && wasConnected) {
         if (reconnectTimedOut) {
           reconnectingTimeout = undefined
           if (activeCall !== call || state == "connected") return
@@ -653,7 +655,7 @@ const processCommand = (function () {
           const {media, iceServers, relay} = command
           const encryption = supportsInsertableStreams(useWorker)
           const aesKey = encryption ? command.aesKey : undefined
-          activeCall = await initializeCall(getCallConfig(encryption && !!aesKey, iceServers, relay), media, aesKey)
+          activeCall = await initializeCall(getCallConfig(encryption && !!aesKey, iceServers, relay), media, aesKey, command.reconnect)
           await setupLocalStream(true, activeCall)
           setupCodecPreferences(activeCall)
 
@@ -693,7 +695,7 @@ const processCommand = (function () {
             const offer: RTCSessionDescriptionInit = parse(command.offer)
             const remoteIceCandidates: RTCIceCandidateInit[] = parse(command.iceCandidates)
             const {media, aesKey, iceServers, relay} = command
-            activeCall = await initializeCall(getCallConfig(!!aesKey, iceServers, relay), media, aesKey)
+            activeCall = await initializeCall(getCallConfig(!!aesKey, iceServers, relay), media, aesKey, command.reconnect)
             const pc = activeCall.connection
             // console.log("offer remoteIceCandidates", JSON.stringify(remoteIceCandidates))
             await pc.setRemoteDescription(new RTCSessionDescription(!webView69Or70() ? offer : adaptSdpToOldWebView(offer)))
