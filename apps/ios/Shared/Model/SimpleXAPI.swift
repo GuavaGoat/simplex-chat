@@ -2825,6 +2825,7 @@ func processReceivedMsg(_ res: ChatEvent) async {
             await MainActor.run {
                 call.callState = .offerReceived
                 call.sharedKey = sharedKey
+                call.contact = contact
             }
             let useRelay = UserDefaults.standard.bool(forKey: DEFAULT_WEBRTC_POLICY_RELAY)
             let iceServers = getIceServers()
