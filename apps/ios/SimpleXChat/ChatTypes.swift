@@ -19,6 +19,9 @@ public let REPORTS_VERSION = 12
 // support group knocking (MsgScope)
 public let GROUP_KNOCKING_VERSION = 15
 
+// keeps a call open while it reconnects
+public let CALL_RECONNECT_VERSION = 20
+
 public let contentModerationPostLink = URL(string: "https://simplex.chat/blog/20250114-simplex-network-large-groups-privacy-preserving-content-moderation.html#preventing-server-abuse-without-compromising-e2e-encryption")!
 
 public struct User: Identifiable, Decodable, UserLike, NamedChat, Hashable {
